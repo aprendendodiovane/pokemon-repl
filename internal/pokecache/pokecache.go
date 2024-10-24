@@ -36,15 +36,19 @@ func (c *Cache) Set(key string, val []byte) error {
 }
 
 func (c *Cache) Get(key string) ([]byte, bool) {
+	c.mux.RLock()
     item, ok := c.cacheMap[key]
+	c.mux.RUnlock()
 	if !ok {
-        return []byte{}, false
+        return []byte{}, ok
     }
     return item.val, ok
 }
 
 func (c *Cache) Delete(key string) {
+	c.mux.Lock()
     delete(c.cacheMap, key)
+	c.mux.Unlock()
 }
 
 func NewCache() *Cache {
