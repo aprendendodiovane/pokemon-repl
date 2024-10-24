@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/aprendendodiovane/pokedex-repl/internal/pokecache"
 )
 
 var cliName string = "pokedex-cli"
@@ -195,12 +198,14 @@ func cleanInput(input string) string {
 
 func main() {
 	config := &config{}
+	cacheDate := pokecache.NewCache(time.Duration(50))
 
+	// Adding some example into the cache just to let go build work properly
+	cacheDate.Set("s", []byte("s"))
 	commands := returnCliCommand()
 	scanner := bufio.NewScanner(os.Stdin)
 	printPrompt()
 	for scanner.Scan() {
-	
 		name := cleanInput(scanner.Text())
 		if command, ok := commands[name]; ok {
 			command.callback(config)

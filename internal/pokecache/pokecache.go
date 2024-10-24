@@ -9,6 +9,7 @@ import (
 type Cache struct {
 	cacheMap map[string]CacheItem
 	mux sync.RWMutex
+	tick time.Ticker
 }
 
 type CacheItem struct {
@@ -45,15 +46,25 @@ func (c *Cache) Get(key string) ([]byte, bool) {
     return item.val, ok
 }
 
-func (c *Cache) Delete(key string) {
-	c.mux.Lock()
-    delete(c.cacheMap, key)
-	c.mux.Unlock()
+func (c *Cache) reapLoop() {
+	tck := <- c.tick.C
+	for item, val := range c.cacheMap {
+		// Validation not yet implemented, this is just a workaround
+		if tck.Compare(val.createdAt) > 0 {
+            c.mux.Lock()
+            delete(c.cacheMap, item)
+            c.mux.Unlock()
+        }
+	}
 }
 
-func NewCache() *Cache {
-	return &Cache{
+func NewCache(duration time.Duration) *Cache {
+	t := time.NewTicker(duration * time.Second)
+	cache := &Cache{
         cacheMap: make(map[string]CacheItem),
 		mux: sync.RWMutex{},
+		tick: *t,
     }
+	go cache.reapLoop()
+	return cache
 }
