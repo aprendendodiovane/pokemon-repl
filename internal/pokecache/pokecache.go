@@ -8,12 +8,12 @@ import (
 
 type Cache struct {
 	cacheMap map[string]CacheItem
-	mux sync.RWMutex
-	tick time.Ticker
+	mux      sync.RWMutex
+	tick     time.Ticker
 }
 
 type CacheItem struct {
-	val []byte
+	val       []byte
 	createdAt time.Time
 }
 
@@ -25,8 +25,8 @@ func (c *Cache) Set(key string, val []byte) error {
 	c.mux.Unlock()
 
 	item := CacheItem{
-		val: val,
-        createdAt: time.Now(),
+		val:       val,
+		createdAt: time.Now(),
 	}
 
 	c.mux.Lock()
@@ -37,34 +37,36 @@ func (c *Cache) Set(key string, val []byte) error {
 }
 
 func (c *Cache) Get(key string) ([]byte, bool) {
-	c.mux.RLock()
-    item, ok := c.cacheMap[key]
-	c.mux.RUnlock()
+	c.mux.Lock()
+	item, ok := c.cacheMap[key]
+	c.mux.Unlock()
+	fmt.Printf("item: %v, ok: %v", item, !ok)
+
 	if !ok {
-        return []byte{}, ok
-    }
-    return item.val, ok
+		return []byte{}, false
+	}
+	return item.val, ok
 }
 
 func (c *Cache) reapLoop() {
-	tck := <- c.tick.C
+	tck := <-c.tick.C
 	for item, val := range c.cacheMap {
 		// Validation not yet implemented, this is just a workaround
-		if tck.Compare(val.createdAt) > 0 {
-            c.mux.Lock()
-            delete(c.cacheMap, item)
-            c.mux.Unlock()
-        }
+		if tck.After(val.createdAt) {
+			c.mux.Lock()
+			delete(c.cacheMap, item)
+			c.mux.Unlock()
+		}
 	}
 }
 
 func NewCache(duration time.Duration) *Cache {
 	t := time.NewTicker(duration * time.Second)
 	cache := &Cache{
-        cacheMap: make(map[string]CacheItem),
-		mux: sync.RWMutex{},
-		tick: *t,
-    }
+		cacheMap: make(map[string]CacheItem),
+		mux:      sync.RWMutex{},
+		tick:     *t,
+	}
 	go cache.reapLoop()
 	return cache
 }
