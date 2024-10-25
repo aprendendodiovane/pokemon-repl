@@ -1,15 +1,11 @@
 package pokecache
 
 import (
-	"fmt"
-	"sync"
 	"time"
 )
 
 type Cache struct {
 	cacheMap map[string]CacheItem
-	mux      sync.RWMutex
-	tick     time.Ticker
 }
 
 type CacheItem struct {
@@ -17,56 +13,39 @@ type CacheItem struct {
 	createdAt time.Time
 }
 
-func (c *Cache) Set(key string, val []byte) error {
-	c.mux.Lock()
-	if len(c.cacheMap[key].val) != 0 {
-		return fmt.Errorf("key %s already exists", key)
-	}
-	c.mux.Unlock()
-
-	item := CacheItem{
+func (c *Cache) Add(key string, val []byte) {
+	c.cacheMap[key] = CacheItem{
 		val:       val,
-		createdAt: time.Now(),
+		createdAt: time.Now().UTC(),
 	}
-
-	c.mux.Lock()
-	c.cacheMap[key] = item
-	c.mux.Unlock()
-
-	return nil
 }
 
 func (c *Cache) Get(key string) ([]byte, bool) {
-	c.mux.Lock()
 	item, ok := c.cacheMap[key]
-	c.mux.Unlock()
-	fmt.Printf("item: %v, ok: %v", item, !ok)
-
-	if !ok {
-		return []byte{}, false
-	}
 	return item.val, ok
 }
 
-func (c *Cache) reapLoop() {
-	tck := <-c.tick.C
-	for item, val := range c.cacheMap {
-		// Validation not yet implemented, this is just a workaround
-		if tck.After(val.createdAt) {
-			c.mux.Lock()
-			delete(c.cacheMap, item)
-			c.mux.Unlock()
+func (c *Cache) reapLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	for range ticker.C {
+		c.reap(interval)
+	}
+}
+
+
+func (c *Cache) reap(interval time.Duration) {
+	timeToDelete := time.Now().Add(-interval)
+	for k,v := range c.cacheMap {
+		if v.createdAt.Before(timeToDelete) {
+			delete(c.cacheMap, k)
 		}
 	}
 }
 
-func NewCache(duration time.Duration) *Cache {
-	t := time.NewTicker(duration * time.Second)
-	cache := &Cache{
+func NewCache(interval time.Duration) Cache {
+	c := Cache{
 		cacheMap: make(map[string]CacheItem),
-		mux:      sync.RWMutex{},
-		tick:     *t,
 	}
-	go cache.reapLoop()
-	return cache
+	go c.reapLoop(interval)
+	return c
 }
